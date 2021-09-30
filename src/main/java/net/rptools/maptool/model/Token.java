@@ -192,6 +192,7 @@ public class Token extends BaseModel implements Cloneable {
     setTerrainModifierOperation,
     setTerrainModifiersIgnored,
     setVBL,
+    setIsTerrainVBL,
     setImageAsset,
     setPortraitImage,
     setCharsheetImage,
@@ -252,7 +253,12 @@ public class Token extends BaseModel implements Cloneable {
   private int alwaysVisibleTolerance = 2; // Default for # of regions (out of 9) that must be seen
   // before token is shown over FoW
   private boolean isAlwaysVisible = false; // Controls whether a Token is shown over VBL
+  // This can be regular VBL or terrain VBL.
   private Area vbl;
+  // New tokens will be terrain VBL by default as that is a common case. Due to deserialization
+  // behaviour tokens without this field will have it set to false, which preserves backwards
+  // compatibility with pre 1.10.
+  private boolean isTerrainVbl = true;
 
   private String name;
   private Set<String> ownerList;
@@ -408,6 +414,7 @@ public class Token extends BaseModel implements Cloneable {
     alwaysVisibleTolerance = token.alwaysVisibleTolerance;
     isAlwaysVisible = token.isAlwaysVisible;
     vbl = token.vbl;
+    isTerrainVbl = token.isTerrainVbl;
 
     name = token.name;
     notes = token.notes;
@@ -1429,6 +1436,14 @@ public class Token extends BaseModel implements Cloneable {
     return vbl;
   }
 
+  public boolean getIsTerrainVbl() {
+    return this.isTerrainVbl;
+  }
+
+  public void setIsTerrainVBL(boolean isTerrainVbl) {
+    this.isTerrainVbl = isTerrainVbl;
+  }
+
   public Area getTransformedVBL() {
     return getTransformedVBL(vbl);
   }
@@ -1514,7 +1529,7 @@ public class Token extends BaseModel implements Cloneable {
   /**
    * Return the existence of the token's VBL
    *
-   * @return rue if the token's vbl is null, and false otherwise
+   * @return true if the token's vbl is not null, and false otherwise
    */
   public boolean hasVBL() {
     return vbl != null;
@@ -2676,6 +2691,10 @@ public class Token extends BaseModel implements Cloneable {
         if (!hasVBL()) { // if VBL removed
           zone.tokenTopologyChanged(); // if token lost VBL, TOKEN_CHANGED won't update topology
         }
+        break;
+      case setIsTerrainVBL:
+        setIsTerrainVBL((boolean) parameters[0]);
+        zone.tokenTopologyChanged(); // if token lost VBL, TOKEN_CHANGED won't update topology
         break;
       case setImageAsset:
         setImageAsset((String) parameters[0], (MD5Key) parameters[1]);

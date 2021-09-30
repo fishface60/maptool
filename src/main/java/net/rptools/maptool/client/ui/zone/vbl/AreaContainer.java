@@ -14,8 +14,18 @@
  */
 package net.rptools.maptool.client.ui.zone.vbl;
 
+import java.awt.Point;
 import java.awt.geom.Area;
+import java.awt.geom.Point2D;
+import java.util.List;
+import javax.annotation.Nullable;
+import org.locationtech.jts.geom.GeometryFactory;
 
 public interface AreaContainer {
   public Area getBounds();
+
+  public @Nullable AreaContainer getDeepestContainerAt(Point2D point);
+
+  public List<VisibleAreaSegment> getVisionBlockingBoundarySegements(
+      GeometryFactory geometryFactory, Point origin, boolean frontSegments);
 }

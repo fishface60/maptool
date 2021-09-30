@@ -171,8 +171,14 @@ public abstract class AbstractAStarWalker extends AbstractZoneWalker {
     Area newVbl = new Area();
     if (MapTool.getFrame().getCurrentZoneRenderer() != null) {
       if (MapTool.getServerPolicy().getVblBlocksMove()) {
-        newVbl =
+        // TODO Any reason we get the VBL from the topology tree instead of directly from the zone
+        // like we do for MBL?
+        var vbl =
             MapTool.getFrame().getCurrentZoneRenderer().getZoneView().getTopologyTree().getArea();
+        var terrainVbl =
+            MapTool.getFrame().getCurrentZoneRenderer().getZoneView().getTerrainVblTree().getArea();
+        newVbl.add(vbl);
+        newVbl.add(terrainVbl);
 
         if (tokenVBL != null) {
           newVbl.subtract(tokenVBL);

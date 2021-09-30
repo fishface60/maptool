@@ -246,6 +246,18 @@ public abstract class AbstractDrawingTool extends DefaultTool implements ZoneOve
     return tokenTopolgy;
   }
 
+  protected Area getTokenTerrainVbl() {
+    List<Token> terrainVblTokens =
+        MapTool.getFrame().getCurrentZoneRenderer().getZone().getTokensWithTerrainVBL();
+
+    Area tokenTopology = new Area();
+    for (Token vblToken : terrainVblTokens) {
+      tokenTopology.add(vblToken.getTransformedVBL());
+    }
+
+    return tokenTopology;
+  }
+
   @Override
   public abstract void paintOverlay(ZoneRenderer renderer, Graphics2D g);
 
@@ -281,7 +293,6 @@ public abstract class AbstractDrawingTool extends DefaultTool implements ZoneOve
   protected void paintTopologyOverlay(Graphics2D g, Drawable drawable, int penMode) {
     if (MapTool.getPlayer().isGM()) {
       Zone zone = renderer.getZone();
-      Area topology = zone.getTopology();
 
       Graphics2D g2 = (Graphics2D) g.create();
       g2.translate(renderer.getViewOffsetX(), renderer.getViewOffsetY());
@@ -290,11 +301,17 @@ public abstract class AbstractDrawingTool extends DefaultTool implements ZoneOve
       g2.setColor(AppStyle.tokenTopologyColor);
       g2.fill(getTokenTopology());
 
+      g2.setColor(AppStyle.tokenTerrainVblColor);
+      g2.fill(getTokenTerrainVbl());
+
       g2.setColor(AppStyle.topologyTerrainColor);
       g2.fill(zone.getTopologyTerrain());
 
       g2.setColor(AppStyle.topologyColor);
-      g2.fill(topology);
+      g2.fill(zone.getTopology());
+
+      g2.setColor(AppStyle.terrainVblColor);
+      g2.fill(zone.getTerrainVbl());
 
       g2.dispose();
     }

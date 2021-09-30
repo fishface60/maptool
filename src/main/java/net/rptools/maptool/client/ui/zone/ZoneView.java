@@ -62,8 +62,12 @@ public class ZoneView implements ModelChangeListener {
 
   /** The digested topology of the map VBL, and possibly tokens VBL. */
   private AreaTree topologyTree;
+  /** The digested topology of the map terrain VBL, and possibly tokens VBL. */
+  private AreaTree terrainVblTree;
   /** The VBL area of the zone VBL and the tokens VBL. */
   private Area tokenTopology;
+  /** The VBL area of the zone terrain VBL and the tokens terrain VBL. */
+  private Area tokenTerrainVbl;
 
   /** Lumen for personal vision (darkvision). */
   private static final double LUMEN_VISION = 100;
@@ -101,7 +105,7 @@ public class ZoneView implements ModelChangeListener {
     return zone.getVisionType() != Zone.VisionType.OFF;
   }
 
-  /** @return the current combined VBL (base VBL + TokenVBL) */
+  /** @return the current combined VBL (terrain VBL + base VBL + token terrain VBL + TokenVBL) */
   public synchronized AreaTree getTopologyTree() {
     return getTopologyTree(true);
   }
@@ -125,12 +129,44 @@ public class ZoneView implements ModelChangeListener {
         tokenTopology.add(vblToken.getTransformedVBL());
       }
 
-      topologyTree = new AreaTree(tokenTopology);
+      topologyTree = new AreaTree(tokenTopology, false);
     } else if (topologyTree == null) {
-      topologyTree = new AreaTree(zone.getTopology());
+      topologyTree = new AreaTree(zone.getTopology(), false);
     }
 
     return topologyTree;
+  }
+
+  public synchronized AreaTree getTerrainVblTree() {
+    return getTerrainVblTree(true);
+  }
+
+  /**
+   * Get the topologyTree. The topologyTree is "cached" and should only regenerate when topologyTree
+   * is null which should happen on flush calls.
+   *
+   * @param useTokenVBL using token VBL? If so and terrain VBL null, create one from terrain VBL
+   *     tokens.
+   * @return the AreaTree (topologyTree).
+   */
+  public synchronized AreaTree getTerrainVblTree(boolean useTokenVBL) {
+    if (tokenTerrainVbl == null && useTokenVBL) {
+      log.debug("ZoneView terrain topologyTree is null, generating...");
+
+      tokenTerrainVbl = new Area(zone.getTerrainVbl());
+      List<Token> vblTokens =
+          MapTool.getFrame().getCurrentZoneRenderer().getZone().getTokensWithTerrainVBL();
+
+      for (Token vblToken : vblTokens) {
+        tokenTerrainVbl.add(vblToken.getTransformedVBL());
+      }
+
+      terrainVblTree = new AreaTree(tokenTerrainVbl, true);
+    } else if (terrainVblTree == null) {
+      terrainVblTree = new AreaTree(zone.getTerrainVbl(), true);
+    }
+
+    return terrainVblTree;
   }
 
   // Jamz: This function and such "AreaData" never seems to get used...either old or future code?
@@ -253,7 +289,9 @@ public class ZoneView implements ModelChangeListener {
       lightSourceArea.transform(
           AffineTransform.getScaleInstance(sight.getMultiplier(), sight.getMultiplier()));
     }
-    Area visibleArea = FogUtil.calculateVisibility(p.x, p.y, lightSourceArea, getTopologyTree());
+    Area visibleArea =
+        FogUtil.calculateVisibility(
+            p.x, p.y, lightSourceArea, getTopologyTree(), getTerrainVblTree());
 
     if (visibleArea != null && lightSource.getType() == LightSource.Type.NORMAL) {
       addLightSourceToCache(
@@ -362,7 +400,9 @@ public class ZoneView implements ModelChangeListener {
     if (tokenVisibleArea == null) {
       Point p = FogUtil.calculateVisionCenter(token, zone);
       Area visibleArea = sight.getVisionShape(token, zone);
-      tokenVisibleArea = FogUtil.calculateVisibility(p.x, p.y, visibleArea, getTopologyTree());
+      tokenVisibleArea =
+          FogUtil.calculateVisibility(
+              p.x, p.y, visibleArea, getTopologyTree(), getTerrainVblTree());
 
       tokenVisibleAreaCache.put(token.getId(), tokenVisibleArea);
     }
@@ -559,7 +599,8 @@ public class ZoneView implements ModelChangeListener {
             // This needs to be cached somehow
             Area lightSourceArea = lightSource.getArea(token, zone, Direction.CENTER);
             Area visibleArea =
-                FogUtil.calculateVisibility(p.x, p.y, lightSourceArea, getTopologyTree());
+                FogUtil.calculateVisibility(
+                    p.x, p.y, lightSourceArea, getTopologyTree(), getTerrainVblTree());
             if (visibleArea == null) {
               continue;
             }
@@ -812,7 +853,9 @@ public class ZoneView implements ModelChangeListener {
         personalDrawableLightCache.clear();
         visibleAreaMap.clear();
         topologyTree = null;
+        terrainVblTree = null;
         tokenTopology = null;
+        tokenTerrainVbl = null;
         tokenVisibleAreaCache.clear();
 
         // topologyAreaData = null; // Jamz: This isn't used, probably never completed code.
