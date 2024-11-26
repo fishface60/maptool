@@ -39,10 +39,17 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
 import java.security.spec.InvalidKeySpecException;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import javafx.application.Platform;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -70,6 +77,7 @@ import net.rptools.maptool.client.ui.AppMenuBar;
 import net.rptools.maptool.client.ui.ConnectionStatusPanel;
 import net.rptools.maptool.client.ui.MapToolFrame;
 import net.rptools.maptool.client.ui.OSXAdapter;
+import net.rptools.maptool.client.ui.connecttoserverdialog.ConnectToServerDialogPreferences;
 import net.rptools.maptool.client.ui.logger.LogConsoleFrame;
 import net.rptools.maptool.client.ui.sheet.stats.StatSheetListener;
 import net.rptools.maptool.client.ui.theme.Icons;
@@ -177,6 +185,9 @@ public class MapTool {
   private static int windowX = -1;
   private static int windowY = -1;
   private static String loadCampaignOnStartPath = "";
+  @Nullable private static RemoteServerConfig remoteServerConfig = null;
+  @Nullable private static String username = null;
+  @Nullable private static String password = null;
 
   static {
     try {
@@ -1358,6 +1369,17 @@ public class MapTool {
 
       showWarning(message.toString());
     }
+
+    if (remoteServerConfig != null) {
+      var prefs = new ConnectToServerDialogPreferences();
+      if (username == null) {
+        username = prefs.getUsername();
+      }
+      if (password == null) {
+        password = prefs.getPassword();
+      }
+      AppActions.connectToServer(username, password, remoteServerConfig);
+    }
   }
 
   /**
@@ -1535,6 +1557,100 @@ public class MapTool {
     Platform.setImplicitExit(false); // necessary to use JavaFX later
   }
 
+  private static void parsePositionalArg(@Nonnull String arg) {
+    URI uri = null;
+    try {
+      uri = new URI(arg);
+    } catch (URISyntaxException e) {
+    }
+
+    String scheme;
+    if (uri == null
+        || (scheme = uri.getScheme()) == null
+        || !scheme.startsWith("rptools-maptool")) {
+      log.info("Overriding -F option with extra argument");
+      loadCampaignOnStartPath = arg;
+      return;
+    }
+
+    var query = uri.getRawQuery();
+    if (query != null) {
+      for (String component : query.split("&")) {
+        List<String> pair =
+            List.of(component.split("=", 2)).stream()
+                .map(item -> URLDecoder.decode(item, StandardCharsets.UTF_8))
+                .toList();
+        if (pair.size() == 0) {
+          continue;
+        }
+        var key = pair.get(0);
+        if (pair.size() == 1) {
+          if (key.equalsIgnoreCase("usepubkey")) {
+            password = new PasswordGenerator().getPassword();
+          }
+          continue;
+        }
+        var value = pair.get(1);
+        if (key.equalsIgnoreCase("username")) {
+          username = value;
+          continue;
+        }
+        if (key.equalsIgnoreCase("password")) {
+          password = value;
+          continue;
+        }
+      }
+    }
+
+    var authority = uri.getAuthority();
+    var path = uri.getPath();
+    var host = uri.getHost();
+    var port = uri.getPort();
+    if (scheme.equals("rptools-maptool+registry")
+        && authority == null
+        && path != null
+        && path.startsWith("/")
+        && path.indexOf("/", 1) == -1) {
+      var serverName = path.substring(1);
+      remoteServerConfig = MapToolRegistry.getInstance().findInstance(serverName);
+      if (remoteServerConfig == null) {
+        MapTool.showError(I18N.getText("ServerDialog.error.serverNotFound", serverName));
+      }
+    } else if (scheme.equals("rptools-maptool+lan")
+        && authority == null
+        && path != null
+        && path.startsWith("/")
+        && path.indexOf("/", 1) == -1) {
+      var gmName = path.substring(1);
+      var finder = MapToolServiceFinder.getInstance();
+      var future = new CompletableFuture<RemoteServerConfig>();
+      MapToolServiceFinder.MapToolAnnouncementListener listener =
+          (var id, var serverConfig) -> {
+            if (id.equals(gmName) && !future.isDone()) {
+              future.complete(serverConfig);
+            }
+          };
+      finder.addAnnouncementListener(listener);
+      finder.find();
+      try {
+        remoteServerConfig = future.get(3, TimeUnit.SECONDS);
+      } catch (TimeoutException e) {
+        throw new Error("Failed to find LAN service " + gmName + " after 3 seconds");
+      } catch (InterruptedException | ExecutionException e) {
+        throw new Error("Failed to find LAN service " + gmName + ": " + e);
+      } finally {
+        finder.removeAnnouncementListener(listener);
+      }
+    } else if (scheme.equals("rptools-maptool+tcp")
+        && host != null
+        && (path == null || path.isEmpty() || path.equals("/"))) {
+      remoteServerConfig =
+          new RemoteServerConfig.Socket(host, port == -1 ? ServerConfig.DEFAULT_PORT : port);
+    } else {
+      throw new Error("URI " + uri + " path " + path + " is not handled");
+    }
+  }
+
   public static void main(String[] args) {
     log.info("********************************************************************************");
     log.info("**                                                                            **");
@@ -1643,8 +1759,11 @@ public class MapTool {
     log.info("MapTool vendor: " + vendor);
 
     if (cmd.getArgs().length != 0) {
-      log.info("Overriding -F option with extra argument");
-      loadCampaignOnStartPath = cmd.getArgs()[0];
+      try {
+        parsePositionalArg(cmd.getArgs()[0]);
+      } catch (Error e) {
+        MapTool.showWarning("Error parsing the command line", e);
+      }
     }
     if (!loadCampaignOnStartPath.isEmpty()) {
       log.info("Loading initial campaign: " + loadCampaignOnStartPath);
