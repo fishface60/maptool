@@ -41,8 +41,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
 import java.security.spec.InvalidKeySpecException;
 import java.util.*;
@@ -186,8 +184,6 @@ public class MapTool {
   private static int windowY = -1;
   private static String loadCampaignOnStartPath = "";
   @Nullable private static RemoteServerConfig remoteServerConfig = null;
-  @Nullable private static String username = null;
-  @Nullable private static String password = null;
 
   static {
     try {
@@ -1372,13 +1368,7 @@ public class MapTool {
 
     if (remoteServerConfig != null) {
       var prefs = new ConnectToServerDialogPreferences();
-      if (username == null) {
-        username = prefs.getUsername();
-      }
-      if (password == null) {
-        password = prefs.getPassword();
-      }
-      AppActions.connectToServer(username, password, remoteServerConfig);
+      AppActions.connectToServer(prefs.getUsername(), prefs.getPassword(), remoteServerConfig);
     }
   }
 
@@ -1571,35 +1561,6 @@ public class MapTool {
       log.info("Overriding -F option with extra argument");
       loadCampaignOnStartPath = arg;
       return;
-    }
-
-    var query = uri.getRawQuery();
-    if (query != null) {
-      for (String component : query.split("&")) {
-        List<String> pair =
-            List.of(component.split("=", 2)).stream()
-                .map(item -> URLDecoder.decode(item, StandardCharsets.UTF_8))
-                .toList();
-        if (pair.size() == 0) {
-          continue;
-        }
-        var key = pair.get(0);
-        if (pair.size() == 1) {
-          if (key.equalsIgnoreCase("usepubkey")) {
-            password = new PasswordGenerator().getPassword();
-          }
-          continue;
-        }
-        var value = pair.get(1);
-        if (key.equalsIgnoreCase("username")) {
-          username = value;
-          continue;
-        }
-        if (key.equalsIgnoreCase("password")) {
-          password = value;
-          continue;
-        }
-      }
     }
 
     var authority = uri.getAuthority();
