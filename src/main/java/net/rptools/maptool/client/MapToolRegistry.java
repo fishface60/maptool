@@ -22,6 +22,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.net.InetAddress;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -154,7 +155,8 @@ public class MapToolRegistry {
     JsonObject body = new JsonObject();
     body.addProperty("name", id);
     body.addProperty("port", port);
-    body.addProperty("address", getAddress());
+    var address = getAddress();
+    body.addProperty("address", address == null ? "" : address.getHostName());
     body.addProperty("webrtc", webrtc);
     if (MapTool.isDevelopment()) {
       body.addProperty("version", "Dev");
@@ -227,7 +229,8 @@ public class MapToolRegistry {
     JsonObject body = new JsonObject();
     body.addProperty("id", serverRegistrationId);
     body.addProperty("clientId", MapTool.getClientId());
-    body.addProperty("address", getAddress());
+    var address = getAddress();
+    body.addProperty("address", address == null ? "" : address.getHostName());
     body.addProperty("number_players", MapTool.getPlayerList().size());
     body.addProperty("number_maps", MapTool.getCampaign().getZones().size());
 
@@ -260,13 +263,14 @@ public class MapToolRegistry {
   /**
    * Get the external IP address of this MapTool instance.
    *
-   * @return The external IP, or the empty string if none could be determined.
+   * @return The external IP, or null if none could be determined.
    */
-  public String getAddress() {
+  @Nullable
+  public InetAddress getAddress() {
     try {
       return this.getAddressAsync().get(30, TimeUnit.SECONDS);
     } catch (Exception e) {
-      return "";
+      return null;
     }
   }
 
@@ -275,6 +279,7 @@ public class MapToolRegistry {
    *
    * @return A future that resolves to the external IP address.
    */
+  @Nonnull
   public Future<String> getAddressAsync() {
     List<String> ipCheckURLs;
     try (InputStream ipCheckList =
@@ -289,7 +294,7 @@ public class MapToolRegistry {
       throw new AssertionError("Unable to read ip-check list.", e); // Shouldn't happen
     }
 
-    final CompletableFuture<String> externalIpFuture = new CompletableFuture<>();
+    final CompletableFuture<InetAddress> externalIpFuture = new CompletableFuture<>();
     final ExecutorService executor = Executors.newCachedThreadPool();
     for (String urlString : ipCheckURLs) {
       executor.execute(
@@ -301,7 +306,7 @@ public class MapToolRegistry {
                   new BufferedReader(new InputStreamReader(url.openStream()))) {
                 String ip = reader.readLine();
                 if (ip != null && !ip.isEmpty()) {
-                  externalIpFuture.complete(ip);
+                  externalIpFuture.complete(InetAddress.getByName(ip));
                   // A result has been found. No need to continue running tasks.
                   executor.shutdownNow();
                 }
