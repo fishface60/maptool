@@ -55,6 +55,7 @@ public class MapToolExpressionParser extends ExpressionParser {
               MacroLinkFunction.getInstance(),
               MapFunctions.getInstance(),
               MiscInitiativeFunction.getInstance(),
+              NetworkFunctions.getInstance(),
               PlayerNameFunctions.getInstance(),
               RemoveAllFromInitiativeFunction.getInstance(),
               ReturnFunction.getInstance(),
