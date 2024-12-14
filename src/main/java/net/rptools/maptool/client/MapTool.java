@@ -1207,6 +1207,11 @@ public class MapTool {
     return server != null && !server.isPersonalServer();
   }
 
+  /** returns whether the player is the server, either personal or hosting. */
+  public static boolean isServer() {
+    return server != null;
+  }
+
   public static void disconnect() {
     client.close();
     new MapToolEventBus().getMainEventBus().post(new ServerDisconnected());
