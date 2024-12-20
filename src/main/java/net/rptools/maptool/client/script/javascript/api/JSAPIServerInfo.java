@@ -60,4 +60,19 @@ public class JSAPIServerInfo implements MapToolJSAPIInterface {
 
     return server.getName();
   }
+
+  /**
+   * Get the port of the socket the server is running on or -1.
+   *
+   * @return The port number, or -1 if the server is not serving on a socket.
+   */
+  @HostAccess.Export
+  public int getPort() {
+    var server = MapTool.getServer();
+    if (server == null) {
+      return -1;
+    }
+
+    return server.getPort();
+  }
 }
