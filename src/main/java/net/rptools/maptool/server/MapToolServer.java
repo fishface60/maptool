@@ -91,7 +91,7 @@ public class MapToolServer {
   private State currentState;
 
   public MapToolServer(
-      String id,
+      @Nullable String id,
       Campaign campaign,
       @Nullable ServerConfig config,
       boolean useUPnP,
@@ -103,7 +103,7 @@ public class MapToolServer {
     this.playerDatabase = playerDb;
 
     this.announcer =
-        config == null
+        config == null || id == null
             ? null
             : new ServiceAnnouncer(id, config.getPort(), AppConstants.SERVICE_GROUP);
 
