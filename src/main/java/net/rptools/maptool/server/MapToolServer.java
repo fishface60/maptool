@@ -209,6 +209,19 @@ public class MapToolServer {
     };
   }
 
+  /**
+   * Get the ID that this server responds to service announcement requests with.
+   *
+   * @return The identifier or null if it's not being announced.
+   */
+  @Nullable
+  public String getServiceIdentifier() {
+    if (announcer == null) {
+      return null;
+    }
+    return serviceIdentifier;
+  }
+
   private void connectionAdded(Connection conn) {
     var handshake =
         new ServerHandshake(
