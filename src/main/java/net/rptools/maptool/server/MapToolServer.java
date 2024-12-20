@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicBoolean;
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.swing.SwingUtilities;
 import net.rptools.clientserver.ConnectionFactory;
@@ -67,6 +68,7 @@ public class MapToolServer {
     Stopped
   }
 
+  @Nonnull private final String serviceIdentifier;
   private final Server server;
   private final MessageHandler messageHandler;
   private final Router router;
@@ -81,7 +83,7 @@ public class MapToolServer {
   private final AssetProducerThread assetProducerThread;
 
   private final boolean useUPnP;
-  private final ServiceAnnouncer announcer;
+  @Nullable private ServiceAnnouncer announcer;
   private Campaign campaign;
   private ServerPolicy policy;
   private HeartbeatThread heartbeatThread;
@@ -97,15 +99,11 @@ public class MapToolServer {
       boolean useUPnP,
       ServerPolicy policy,
       ServerSidePlayerDatabase playerDb) {
+    this.serviceIdentifier = id;
     this.config = config;
     this.useUPnP = useUPnP;
     this.policy = new ServerPolicy(policy);
     this.playerDatabase = playerDb;
-
-    this.announcer =
-        config == null || id == null
-            ? null
-            : new ServiceAnnouncer(id, config.getPort(), AppConstants.SERVICE_GROUP);
 
     server = ConnectionFactory.getInstance().createServer(this.config);
     messageHandler = new ServerMessageHandler(this);
@@ -354,6 +352,7 @@ public class MapToolServer {
 
     if (announcer != null) {
       announcer.stop();
+      announcer = null;
     }
 
     // Unregister ourselves
@@ -418,7 +417,8 @@ public class MapToolServer {
       }
     }
 
-    if (announcer != null) {
+    if (serviceIdentifier != null && config != null) {
+      announcer = new ServiceAnnouncer(serviceIdentifier, config.getPort(), AppConstants.SERVICE_GROUP);
       announcer.start();
     }
 
