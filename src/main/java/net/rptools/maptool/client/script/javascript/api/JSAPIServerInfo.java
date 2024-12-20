@@ -75,4 +75,20 @@ public class JSAPIServerInfo implements MapToolJSAPIInterface {
 
     return server.getPort();
   }
+
+  /**
+   * Get the ID that this server responds to service announcement requests with.
+   *
+   * @return The identifier or null if it's not being announced.
+   */
+  @Nullable
+  @HostAccess.Export
+  public String getServiceIdentifier() {
+    var server = MapTool.getServer();
+    if (server == null) {
+      return null;
+    }
+
+    return server.getServiceIdentifier();
+  }
 }
