@@ -28,6 +28,8 @@ public class JSAPIMapTool implements MapToolJSAPIInterface {
 
   @HostAccess.Export public final JSAPIChat chat = new JSAPIChat();
 
+  @HostAccess.Export public final JSAPINetwork network = new JSAPINetwork();
+
   @HostAccess.Export public final JSAPIPlayer player = new JSAPIPlayer();
 
   @HostAccess.Export public final JSAPIServerInfo serverInfo = new JSAPIServerInfo();
