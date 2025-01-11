@@ -191,7 +191,7 @@ public class AppActions {
 
         @Override
         public boolean isAvailable() {
-          return MapTool.isHostingServer() || MapTool.isPersonalServer();
+          return MapTool.isServer();
         }
 
         @Override

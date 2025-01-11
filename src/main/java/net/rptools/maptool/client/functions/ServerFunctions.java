@@ -47,10 +47,7 @@ public class ServerFunctions extends AbstractFunction {
 
     String fName = functionName.toLowerCase();
     return switch (fName) {
-      case "server.isserver" ->
-          MapTool.isHostingServer() || MapTool.isPersonalServer()
-              ? BigDecimal.ONE
-              : BigDecimal.ZERO;
+      case "server.isserver" -> MapTool.isServer() ? BigDecimal.ONE : BigDecimal.ZERO;
       case "server.ishosting" -> MapTool.isHostingServer() ? BigDecimal.ONE : BigDecimal.ZERO;
       case "server.ispersonal" -> MapTool.isPersonalServer() ? BigDecimal.ONE : BigDecimal.ZERO;
       case "getmovelock" -> MapTool.getServerPolicy().isMovementLocked();
