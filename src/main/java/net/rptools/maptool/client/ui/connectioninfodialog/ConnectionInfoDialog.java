@@ -23,7 +23,6 @@ import java.net.URI;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import javax.annotation.Nonnull;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
@@ -53,6 +52,11 @@ public class ConnectionInfoDialog extends JDialog {
    */
   public ConnectionInfoDialog(MapToolServer server) {
     super(MapTool.getFrame(), I18N.getText("ConnectionInfoDialog.title"), true);
+
+    var netUtil = NetUtil.getInstance();
+    var localAddressesFuture = netUtil.getLocalAddresses();
+    var externalAddressFuture = netUtil.getExternalAddress();
+
     setDefaultCloseOperation(DISPOSE_ON_CLOSE);
     setSize(275, 275);
 
@@ -81,62 +85,54 @@ public class ConnectionInfoDialog extends JDialog {
     externalAddressLabel.setText(I18N.getText("ConnectionInfoDialog.discovering"));
     portLabel.setText(portString);
 
-    NetUtil.getInstance()
-        .getLocalAddresses()
-        .thenAccept(
-            localAddresses -> {
-              if (!localAddresses.ipv4().isEmpty()) {
-                localv4AddressLabel.setText(NetUtil.formatAddress(localAddresses.ipv4().get(0)));
-              }
-              if (!localAddresses.ipv6().isEmpty()) {
-                localv6AddressLabel.setText(NetUtil.formatAddress(localAddresses.ipv6().get(0)));
-              }
-            });
+    localAddressesFuture.thenAccept(
+        localAddresses -> {
+          if (!localAddresses.ipv4().isEmpty()) {
+            localv4AddressLabel.setText(NetUtil.formatAddress(localAddresses.ipv4().get(0)));
+          }
+          if (!localAddresses.ipv6().isEmpty()) {
+            localv6AddressLabel.setText(NetUtil.formatAddress(localAddresses.ipv6().get(0)));
+          }
+        });
 
-    Supplier<CompletableFuture<ServerAddress.Registry>> getServerName =
-        () -> completedFuture(new ServerAddress.Registry(server.getName()));
-    Supplier<CompletableFuture<ServerAddress.Lan>> getServiceIdentifier =
-        () -> completedFuture(new ServerAddress.Lan(server.getServiceIdentifier()));
-    Supplier<CompletableFuture<ServerAddress.Tcp>> getLocalV4 =
-        () ->
-            NetUtil.getInstance()
-                .getLocalAddresses()
-                .thenApply(
-                    localAddresses -> {
-                      if (localAddresses.ipv4().isEmpty()) {
-                        return null;
-                      }
-                      return new ServerAddress.Tcp(
-                          NetUtil.formatAddress(localAddresses.ipv4().get(0)),
-                          server.getPort(),
-                          false);
-                    });
-    Supplier<CompletableFuture<ServerAddress.Tcp>> getLocalV6 =
-        () ->
-            NetUtil.getInstance()
-                .getLocalAddresses()
-                .thenApply(
-                    localAddresses -> {
-                      if (localAddresses.ipv6().isEmpty()) {
-                        return null;
-                      }
-                      return new ServerAddress.Tcp(
-                          NetUtil.formatAddress(localAddresses.ipv6().get(0)),
-                          server.getPort(),
-                          false);
-                    });
-    Supplier<CompletableFuture<ServerAddress.Tcp>> getExternal =
-        () ->
-            NetUtil.getInstance()
-                .getExternalAddress()
-                .thenApply(
-                    address -> {
-                      if (address == null) {
-                        return null;
-                      }
-                      return new ServerAddress.Tcp(
-                          NetUtil.formatAddress(address), server.getPort(), false);
-                    });
+    externalAddressFuture.thenAccept(
+        address -> {
+          if (address != null) {
+            SwingUtilities.invokeLater(
+                () -> externalAddressLabel.setText(NetUtil.formatAddress(address)));
+          }
+        });
+
+    CompletableFuture<ServerAddress.Registry> getServerName =
+        completedFuture(new ServerAddress.Registry(server.getName()));
+    CompletableFuture<ServerAddress.Lan> getServiceIdentifier =
+        completedFuture(new ServerAddress.Lan(server.getServiceIdentifier()));
+    CompletableFuture<ServerAddress.Tcp> getLocalV4 =
+        localAddressesFuture.thenApply(
+            localAddresses -> {
+              if (localAddresses.ipv4().isEmpty()) {
+                return null;
+              }
+              return new ServerAddress.Tcp(
+                  NetUtil.formatAddress(localAddresses.ipv4().get(0)), server.getPort(), false);
+            });
+    CompletableFuture<ServerAddress.Tcp> getLocalV6 =
+        localAddressesFuture.thenApply(
+            localAddresses -> {
+              if (localAddresses.ipv6().isEmpty()) {
+                return null;
+              }
+              return new ServerAddress.Tcp(
+                  NetUtil.formatAddress(localAddresses.ipv6().get(0)), server.getPort(), false);
+            });
+    CompletableFuture<ServerAddress.Tcp> getExternal =
+        externalAddressFuture.thenApply(
+            address -> {
+              if (address == null) {
+                return null;
+              }
+              return new ServerAddress.Tcp(NetUtil.formatAddress(address), server.getPort(), false);
+            });
     registerCopyButton(panel, "registryUriCopyButton", getServerName, ServerAddress::toUri);
     registerCopyButton(panel, "registryHttpUrlCopyButton", getServerName, ServerAddress::toHttpUrl);
     registerCopyButton(panel, "lanUriCopyButton", getServiceIdentifier, ServerAddress::toUri);
@@ -155,29 +151,18 @@ public class ConnectionInfoDialog extends JDialog {
     setLayout(new GridLayout());
     ((JComponent) getContentPane()).setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
     add(panel);
-
-    NetUtil.getInstance()
-        .getExternalAddress()
-        .thenAccept(
-            address -> {
-              if (address != null) {
-                SwingUtilities.invokeLater(
-                    () -> externalAddressLabel.setText(NetUtil.formatAddress(address)));
-              }
-            });
   }
 
   private <T extends ServerAddress> void registerCopyButton(
       @Nonnull AbeillePanel panel,
       @Nonnull String buttonId,
-      @Nonnull Supplier<CompletableFuture<T>> connectionSupplier,
+      @Nonnull CompletableFuture<T> future,
       @Nonnull Function<T, URI> specToUri) {
     if (!(panel.getButton(buttonId) instanceof JButton button)) {
       return;
     }
     button.addActionListener(
         e -> {
-          var future = connectionSupplier.get();
           future.thenAccept(
               connectionSpec -> {
                 var url = specToUri.apply(connectionSpec).toString();
