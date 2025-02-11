@@ -28,4 +28,7 @@ dependencies {
     // compression of messages between client and server
     implementation(libs.apache.commons.compress)
     implementation(libs.zstd)
+
+    // bouncycastle for SSL
+    implementation(libs.bctls)
 }
