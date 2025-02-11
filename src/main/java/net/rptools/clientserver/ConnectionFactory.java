@@ -18,6 +18,7 @@ import java.awt.EventQueue;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import net.rptools.clientserver.simple.connection.Connection;
+import net.rptools.clientserver.simple.connection.SSLConnection;
 import net.rptools.clientserver.simple.connection.SocketConnection;
 import net.rptools.clientserver.simple.connection.WebRTCConnection;
 import net.rptools.clientserver.simple.server.NilServer;
@@ -38,6 +39,8 @@ public class ConnectionFactory {
   @Nonnull
   public Connection createConnection(@Nonnull String id, @Nonnull RemoteServerConfig config) {
     return switch (config) {
+      case RemoteServerConfig.SSLSocket(String hostName, int port) ->
+          new SSLConnection(null, id, hostName, port);
       case RemoteServerConfig.Socket(String hostName, int port) ->
           new SocketConnection(id, hostName, port);
       case RemoteServerConfig.WebRTC(String serverName) ->
