@@ -173,25 +173,27 @@ public class ConnectionFactory {
       return new NilServer();
     }
 
-    if (!config.getUseWebRTC()) {
-      return new SocketServer(config.getPort());
-    }
+    return switch (config.getTransport()) {
+      case ServerConfig.Transport.WebRTC(String serverName) ->
+          new WebRTCServer(
+              serverName,
+              new WebRTCServer.Listener() {
+                @Override
+                public void onLoginError() {
+                  EventQueue.invokeLater(
+                      () -> {
+                        MapTool.showError("ServerDialog.error.serverAlreadyExists");
+                      });
+                }
 
-    return new WebRTCServer(
-        config.getServerName(),
-        new WebRTCServer.Listener() {
-          @Override
-          public void onLoginError() {
-            EventQueue.invokeLater(
-                () -> {
-                  MapTool.showError("ServerDialog.error.serverAlreadyExists");
-                });
-          }
-
-          @Override
-          public void onUnexpectedClose() {
-            MapTool.stopServer();
-          }
-        });
+                @Override
+                public void onUnexpectedClose() {
+                  MapTool.stopServer();
+                }
+              });
+      case ServerConfig.Transport.Socket(int port) -> new SocketServer(port);
+      // TODO: Generate a certificate for our addresses signed by our root-cert
+      case ServerConfig.Transport.SSLSocket(int port) -> new SocketServer(port);
+    };
   }
 }

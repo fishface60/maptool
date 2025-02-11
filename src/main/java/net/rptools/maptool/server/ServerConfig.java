@@ -14,6 +14,9 @@
  */
 package net.rptools.maptool.server;
 
+import javax.annotation.Nonnull;
+import net.rptools.maptool.client.ui.startserverdialog.StartServerDialogPreferences;
+
 public class ServerConfig {
   public static final int DEFAULT_PORT = 51234;
 
@@ -24,7 +27,7 @@ public class ServerConfig {
   private final String serverName;
   private final String hostName;
   private final boolean useEasyConnect;
-  private final boolean useWebRTC;
+  @Nonnull private final StartServerDialogPreferences.Transport transport;
 
   public ServerConfig(
       String hostPlayerId,
@@ -34,7 +37,7 @@ public class ServerConfig {
       String serverName,
       String hostName,
       boolean useEasyConnect,
-      boolean useWebRTC) {
+      @Nonnull StartServerDialogPreferences.Transport transport) {
     this.hostPlayerId = hostPlayerId;
     this.gmPassword = gmPassword;
     this.playerPassword = playerPassword;
@@ -42,7 +45,7 @@ public class ServerConfig {
     this.serverName = serverName;
     this.hostName = hostName;
     this.useEasyConnect = useEasyConnect;
-    this.useWebRTC = useWebRTC;
+    this.transport = transport;
   }
 
   public String getHostPlayerId() {
@@ -77,7 +80,20 @@ public class ServerConfig {
     return useEasyConnect;
   }
 
-  public boolean getUseWebRTC() {
-    return useWebRTC;
+  public sealed interface Transport {
+    record SSLSocket(int port) implements Transport {}
+
+    record Socket(int port) implements Transport {}
+
+    record WebRTC(String serverName) implements Transport {}
+  }
+
+  @Nonnull
+  public Transport getTransport() {
+    return switch (transport) {
+      case StartServerDialogPreferences.Transport.SSL_SOCKET -> new Transport.SSLSocket(port);
+      case StartServerDialogPreferences.Transport.SOCKET -> new Transport.Socket(port);
+      case StartServerDialogPreferences.Transport.WEB_RTC -> new Transport.WebRTC(serverName);
+    };
   }
 }

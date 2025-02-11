@@ -18,19 +18,31 @@ import java.net.InetAddress;
 import javax.annotation.Nonnull;
 import net.tsc.servicediscovery.AnnouncementListener;
 import net.tsc.servicediscovery.ServiceFinder;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Abstraction over net.tsc.servicediscovery.ServiceFinder to hide MapTool-specific implementation
  * details.
  */
 public class MapToolServiceFinder {
+  private static final Logger log = LogManager.getLogger(MapToolServiceFinder.class);
+
   public interface MapToolAnnouncementListener extends AnnouncementListener {
-    public void serviceAnnouncement(@Nonnull String id, @Nonnull RemoteServerConfig.Socket config);
+    public void serviceAnnouncement(@Nonnull String id, @Nonnull RemoteServerConfig config);
 
     default void serviceAnnouncement(
         @Nonnull String type, @Nonnull InetAddress address, int port, @Nonnull byte[] data) {
-      serviceAnnouncement(
-          new String(data), new RemoteServerConfig.Socket(address.getHostAddress(), port));
+      var id = new String(data);
+      var address = address.getHostAddress();
+      if (type.equals(AppConstants.SERVICE_GROUP_TCP.getType())) {
+        serviceAnnouncement(id, new RemoteServerConfig.Socket(address, port));
+      } else if (type.equals(AppConstants.SERVICE_GROUP_SSL.getType())) {
+        serviceAnnouncement(id, new RemoteServerConfig.SSLSocket(address, port));
+      } else {
+        // Should be unreachable since the finder checks the type matches first.
+        throw new AssertionError(type);
+      }
     }
   }
 
@@ -41,21 +53,26 @@ public class MapToolServiceFinder {
     return instance;
   }
 
-  @Nonnull private ServiceFinder finder;
+  @Nonnull private ServiceFinder sslFinder;
+  @Nonnull private ServiceFinder tcpFinder;
 
   public MapToolServiceFinder() {
-    finder = new ServiceFinder(AppConstants.SERVICE_GROUP);
+    sslFinder = new ServiceFinder(AppConstants.SERVICE_GROUP_SSL);
+    tcpFinder = new ServiceFinder(AppConstants.SERVICE_GROUP_TCP);
   }
 
   public void addAnnouncementListener(@Nonnull MapToolAnnouncementListener listener) {
-    finder.addAnnouncementListener(listener);
+    sslFinder.addAnnouncementListener(listener);
+    tcpFinder.addAnnouncementListener(listener);
   }
 
   public void removeAnnouncementListener(@Nonnull MapToolAnnouncementListener listener) {
-    finder.removeAnnouncementListener(listener);
+    sslFinder.removeAnnouncementListener(listener);
+    tcpFinder.removeAnnouncementListener(listener);
   }
 
   public void find() {
-    finder.find();
+    sslFinder.find();
+    tcpFinder.find();
   }
 }

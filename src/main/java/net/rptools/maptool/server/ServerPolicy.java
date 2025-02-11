@@ -312,7 +312,11 @@ public class ServerPolicy {
         "personal server", MapTool.isPersonalServer() ? BigDecimal.ONE : BigDecimal.ZERO);
 
     StartServerDialogPreferences prefs = new StartServerDialogPreferences();
-    sinfo.addProperty("useWebRTC", prefs.getUseWebRtc() ? BigDecimal.ONE : BigDecimal.ZERO);
+    sinfo.addProperty(
+        "useWebRTC",
+        prefs.getTransport() == StartServerDialogPreferences.Transport.WEB_RTC
+            ? BigDecimal.ONE
+            : BigDecimal.ZERO);
     sinfo.addProperty(
         "usePasswordFile", prefs.getUsePasswordFile() ? BigDecimal.ONE : BigDecimal.ZERO);
     sinfo.addProperty("server name", prefs.getRPToolsName());

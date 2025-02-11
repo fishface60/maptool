@@ -168,6 +168,11 @@ public class StartServerDialog extends AbeillePanel<StartServerDialogPreferences
     dialog.showDialog();
   }
 
+  // TODO: Add to UI
+  public JCheckBox getUseSSLCheckBox() {
+    return (JCheckBox) getComponent("@useSSL");
+  }
+
   public JCheckBox getUseWebRTCCheckBox() {
     return (JCheckBox) getComponent("@useWebRTC");
   }
@@ -267,8 +272,13 @@ public class StartServerDialog extends AbeillePanel<StartServerDialogPreferences
                 prefs.setPlayerLibraryLock(lockPlayerLibrary.isSelected());
 
                 JCheckBox useWebRTCCheckBox = getUseWebRTCCheckBox();
-                prefs.setKeyUseWebrtc(
-                    useWebRTCCheckBox.isEnabled() && useWebRTCCheckBox.isSelected());
+                if (useWebRTCCheckBox.isEnabled() && useWebRTCCheckBox.isSelected()) {
+                  prefs.setTransport(StartServerDialogPreferences.Transport.WEB_RTC);
+                } else if (useSSLCheckBox.isSelected()) {
+                  prefs.setTransport(StartServerDialogPreferences.Transport.SSL_SOCKET);
+                } else {
+                  prefs.setTransport(StartServerDialogPreferences.Transport.SOCKET);
+                }
 
                 accepted = true;
                 dialog.closeDialog();
@@ -295,6 +305,20 @@ public class StartServerDialog extends AbeillePanel<StartServerDialogPreferences
               @Override
               public void changedUpdate(DocumentEvent e) {
                 checkName();
+              }
+            });
+    getUseSSLCheckBox()
+        .addItemListener(
+            itemEvent -> {
+              if (itemEvent.getStateChange() == ItemEvent.SELECTED) {
+                getUseWebRTCCheckBox().setSelected(false);
+              }
+            });
+    getUseWebRTCCheckBox()
+        .addItemListener(
+            itemEvent -> {
+              if (itemEvent.getStateChange() == ItemEvent.SELECTED) {
+                getUseSSLCheckBox().setSelected(false);
               }
             });
   }

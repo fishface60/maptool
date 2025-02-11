@@ -422,16 +422,16 @@ public class ConnectToServerDialog extends AbeillePanel<ConnectToServerDialogPre
   }
 
   // ANNOUNCEMENT LISTENER
-  public void serviceAnnouncement(@Nonnull String id, @Nonnull RemoteServerConfig.Socket config) {
+  public void serviceAnnouncement(@Nonnull String id, @Nonnull RemoteServerConfig config) {
     ((DefaultListModel) getLocalServerList().getModel()).addElement(new ServerInfo(id, config));
   }
 
   private static class ServerInfo {
 
     @Nonnull String id;
-    @Nonnull RemoteServerConfig.Socket config;
+    @Nonnull RemoteServerConfig config;
 
-    public ServerInfo(@Nonnull String id, @Nonnull RemoteServerConfig.Socket config) {
+    public ServerInfo(@Nonnull String id, @Nonnull RemoteServerConfig config) {
       this.id = id.trim();
       this.config = config;
     }

@@ -16,6 +16,7 @@ package net.rptools.maptool.client.ui.startserverdialog;
 
 import java.util.Objects;
 import java.util.prefs.Preferences;
+import javax.annotation.Nonnull;
 import net.rptools.maptool.client.AppConstants;
 import net.rptools.maptool.client.AppPreferences;
 import net.rptools.maptool.client.walker.WalkerMetric;
@@ -53,6 +54,7 @@ public class StartServerDialogPreferences {
   private static final String KEY_LOCK_PLAYER_LIBRARY = "lockPlayerLibrary";
 
   private static final String KEY_USE_WEBRTC = "useWebRTC";
+  private static final String KEY_USE_SSL = "useSSL";
 
   private static Boolean useToolTipsForUnformattedRolls = null;
 
@@ -262,11 +264,36 @@ public class StartServerDialogPreferences {
     prefs.putBoolean(KEY_LOCK_PLAYER_LIBRARY, flag);
   }
 
-  public boolean getUseWebRtc() {
-    return prefs.getBoolean(KEY_USE_WEBRTC, false);
+  public static enum Transport {
+    SSL_SOCKET,
+    SOCKET,
+    WEB_RTC,
   }
 
-  public void setKeyUseWebrtc(boolean flag) {
-    prefs.putBoolean(KEY_USE_WEBRTC, flag);
+  public void setTransport(@Nonnull Transport transport) {
+    switch (transport) {
+      case Transport.SSL_SOCKET -> {
+        prefs.putBoolean(KEY_USE_SSL, true);
+        prefs.putBoolean(KEY_USE_WEBRTC, false);
+      }
+      case Transport.SOCKET -> {
+        prefs.putBoolean(KEY_USE_SSL, false);
+        prefs.putBoolean(KEY_USE_WEBRTC, false);
+      }
+      case Transport.WEB_RTC -> {
+        prefs.putBoolean(KEY_USE_SSL, false);
+        prefs.putBoolean(KEY_USE_WEBRTC, true);
+      }
+    }
+  }
+
+  public Transport getTransport() {
+    if (prefs.getBoolean(KEY_USE_SSL, false)) {
+      return Transport.SSL_SOCKET;
+    }
+    if (prefs.getBoolean(KEY_USE_WEBRTC, false)) {
+      return Transport.WEB_RTC;
+    }
+    return Transport.SOCKET;
   }
 }

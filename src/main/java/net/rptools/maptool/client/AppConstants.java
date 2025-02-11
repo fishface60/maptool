@@ -28,7 +28,8 @@ public class AppConstants {
 
   public static final File UNZIP_DIR = AppUtil.getAppHome("resource");
 
-  public static final ServiceGroup SERVICE_GROUP = new ServiceGroup("maptool");
+  public static final ServiceGroup SERVICE_GROUP_TCP = new ServiceGroup("maptool");
+  public static final ServiceGroup SERVICE_GROUP_SSL = new ServiceGroup("maptool-ssl");
 
   public static final String DEFAULT_MACRO_THEMES = "net/rptools/maptool/client/ui/syntax/themes/";
   public static final File THEMES_DIR = AppUtil.getAppHome("themes/syntax/");

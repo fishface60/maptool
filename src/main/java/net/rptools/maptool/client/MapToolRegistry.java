@@ -126,9 +126,15 @@ public class MapToolRegistry {
         return new RemoteServerConfig.WebRTC(id);
       }
 
-      return new RemoteServerConfig.Socket(
-          json.getAsJsonPrimitive("address").getAsString(),
-          json.getAsJsonPrimitive("port").getAsInt());
+      var address = json.getAsJsonPrimitive("address").getAsString();
+      var port = json.getAsJsonPrimitive("port").getAsInt();
+
+      var sslProperty = json.getAsJsonPrimitive("ssl");
+      if (sslProperty != null && sslProperty.isBoolean() && sslProperty.getAsBoolean()) {
+        return new RemoteServerConfig.SSLSocket(address, port);
+      }
+
+      return new RemoteServerConfig.Socket(address, port);
 
     } catch (Exception e) {
       log.error("Error fetching instance from server registry", e);
@@ -156,13 +162,15 @@ public class MapToolRegistry {
     }
   }
 
-  public RegisterResponse registerInstance(String id, int port, boolean webrtc) {
+  // TODO: Extend to supporting having self-signed certificate
+  public RegisterResponse registerInstance(String id, int port, boolean webrtc, boolean ssl) {
     JsonObject body = new JsonObject();
     body.addProperty("name", id);
     body.addProperty("port", port);
     var address = getAddress();
     body.addProperty("address", address == null ? "" : address.getHostName());
     body.addProperty("webrtc", webrtc);
+    body.addProperty("ssl", ssl);
     if (MapTool.isDevelopment()) {
       body.addProperty("version", "Dev");
     } else {

@@ -14,14 +14,22 @@
  */
 package net.rptools.maptool.server;
 
+import static java.util.concurrent.CompletableFuture.completedFuture;
+
 import java.io.IOException;
+import java.net.InetAddress;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Random;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.swing.SwingUtilities;
@@ -38,6 +46,7 @@ import net.rptools.clientserver.simple.server.WebRTCServer;
 import net.rptools.maptool.client.AppConstants;
 import net.rptools.maptool.client.MapTool;
 import net.rptools.maptool.client.MapToolRegistry;
+import net.rptools.maptool.client.ServerAddress;
 import net.rptools.maptool.client.ui.StaticMessageDialog;
 import net.rptools.maptool.common.MapToolConstants;
 import net.rptools.maptool.language.I18N;
@@ -104,6 +113,8 @@ public class MapToolServer {
       boolean useUPnP,
       ServerPolicy policy,
       ServerSidePlayerDatabase playerDb) {
+    // TODO: Put serviceIdentifier in ServerConfig, they are both null or not together
+    // and them being disjoint requires asserts.
     this.serviceIdentifier = id;
     this.config = config;
     this.useUPnP = useUPnP;
@@ -222,6 +233,80 @@ public class MapToolServer {
       return null;
     }
     return serviceIdentifier;
+  }
+
+  public record Addresses(
+      @Nonnull CompletableFuture<ServerAddress.Registry> registry,
+      @Nonnull CompletableFuture<ServerAddress.Lan> lan,
+      @Nonnull CompletableFuture<List<ServerAddress.Tcp>> localIpv4,
+      @Nonnull CompletableFuture<List<ServerAddress.Tcp>> localIpv6,
+      @Nonnull CompletableFuture<ServerAddress.Tcp> external) {}
+
+  @Nonnull
+  private Addresses getTcpAddresses(@Nonnull Addresses addresses, int port, boolean useSSL) {
+    var netUtil = NetUtil.getInstance();
+    var localAddresses = netUtil.getLocalAddresses();
+    CompletableFuture<InetAddress> externalAddress = netUtil.getExternalAddress();
+
+    var name = getName();
+    var registry =
+        name.isEmpty() ? addresses.registry() : completedFuture(new ServerAddress.Registry(name));
+
+    var lanId = getServiceIdentifier();
+    var lan = lanId == null ? addresses.lan() : completedFuture(new ServerAddress.Lan(lanId));
+
+    Function<InetAddress, ServerAddress.Tcp> toServerAddr =
+        addr -> new ServerAddress.Tcp(NetUtil.formatAddress(addr), port, useSSL);
+
+    return new Addresses(
+        registry,
+        lan,
+        addresses
+            .localIpv4()
+            .thenCombine(
+                localAddresses,
+                (list, addrs) ->
+                    Stream.concat(list.stream(), addrs.ipv4().stream().map(toServerAddr))
+                        .collect(Collectors.toList())),
+        addresses
+            .localIpv6()
+            .thenCombine(
+                localAddresses,
+                (list, addrs) ->
+                    Stream.concat(list.stream(), addrs.ipv6().stream().map(toServerAddr))
+                        .collect(Collectors.toList())),
+        externalAddress.thenApply(toServerAddr));
+  }
+
+  @Nonnull
+  public Addresses getServerAddresses() {
+    var addresses =
+        new Addresses(
+            completedFuture(null),
+            completedFuture(null),
+            completedFuture(List.of()),
+            completedFuture(List.of()),
+            completedFuture(null));
+    if (config != null) {
+      switch (config.getTransport()) {
+        case ServerConfig.Transport.WebRTC(String serverName) -> {
+          addresses =
+              new Addresses(
+                  completedFuture(new ServerAddress.Registry(serverName)),
+                  addresses.lan(),
+                  addresses.localIpv4(),
+                  addresses.localIpv6(),
+                  addresses.external());
+        }
+        case ServerConfig.Transport.SSLSocket(int port) -> {
+          addresses = getTcpAddresses(addresses, port, true);
+        }
+        case ServerConfig.Transport.Socket(int port) -> {
+          addresses = getTcpAddresses(addresses, port, false);
+        }
+      }
+    }
+    return addresses;
   }
 
   private void connectionAdded(Connection conn) {
@@ -427,7 +512,11 @@ public class MapToolServer {
       try {
         MapToolRegistry.RegisterResponse result =
             MapToolRegistry.getInstance()
-                .registerInstance(config.getServerName(), port, config.getUseWebRTC());
+                .registerInstance(
+                    config.getServerName(),
+                    port,
+                    config.getTransport() instanceof ServerConfig.Transport.WebRTC,
+                    config.getTransport() instanceof ServerConfig.Transport.SSLSocket);
         if (result == MapToolRegistry.RegisterResponse.NAME_EXISTS) {
           MapTool.showError("msg.error.alreadyRegistered");
         } else {
@@ -440,7 +529,12 @@ public class MapToolServer {
     }
 
     if (serviceIdentifier != null && port != -1) {
-      announcer = new ServiceAnnouncer(serviceIdentifier, port, AppConstants.SERVICE_GROUP);
+      assert config != null;
+      var group =
+          config.getTransport() instanceof ServerConfig.Transport.Socket
+              ? AppConstants.SERVICE_GROUP_TCP
+              : AppConstants.SERVICE_GROUP_SSL;
+      announcer = new ServiceAnnouncer(serviceIdentifier, port, group);
       announcer.start();
     }
 

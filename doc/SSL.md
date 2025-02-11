@@ -45,6 +45,19 @@ touch ~/.maptool-rptools/config/ca/index.txt
 
 The private key should have its access restricted.
 
+<!-- Best practice has an intermediate CA and the root CA's keys
+are kept in hardware tokens such as a TPM or offline in removable storage
+but this is for guarding against the possibility of the intermediate CA's keys
+being compromised so the root CA can issue a revocation.
+However this assumes central distribution of certificates and an update process
+that can distribute revocations, which would require rptools to act as a CA
+and for MapTool to phone home for CRL updates.
+The added complexity of setting up rptools to act as a CA and issue revocations
+and provide trustable interfaces for communicating that the intermediate CA
+has been compromised does not seem worth the effort compared with the GM asking
+their players to remove the CA certificate.
+-->
+
 ```
 chmod 400 ~/.maptool-rptools/config/private.key
 ```
@@ -60,6 +73,70 @@ It doesn't need to be globally unique but it must not be duplicated
 within a certificate validation chain.
 Using the MapTool client-id and giving it an appropriate prefix and suffix
 should ensure sufficient uniqueness.
+
+<!-- TODO: How do root cert updates work? What do we do in 10 years? -->
+
+<!-- TODO: Is CA config needed? We don't currently pass it to any commands.
+cat >~/.maptool-rptools/config/ca/ca.cnf <<EOF
+[ ca ]                                                   # The default CA section
+default_ca = CA_default                                  # The default CA name
+
+[ CA_default ]                                           # Default settings for the CA
+dir               = $HOME/.maptool-rptools/config        # CA directory
+certs             = \$dir/ca/certs                       # Certificates directory
+crl_dir           = \$dir/ca/crl                         # CRL directory
+new_certs_dir     = \$dir/ca/newcerts                    # New certificates directory
+database          = \$dir/ca/index.txt                   # Certificate index file
+serial            = \$dir/ca/serial                      # Serial number file
+RANDFILE          = \$dir/ca/private/.rand               # Random number file
+private_key       = \$dir/private.key                    # Root CA private key
+certificate       = \$dir/ca/certs/ca.crt                # Root CA certificate
+crl               = \$dir/ca/crl/ca.crl.pem              # Root CA CRL
+crlnumber         = \$dir/ca/crlnumber                   # Root CA CRL number
+crl_extensions    = crl_ext                              # CRL extensions
+default_crl_days  = 30                                   # Default CRL validity days
+default_md        = sha256                               # Default message digest
+preserve          = no                                   # Preserve existing extensions
+email_in_dn       = no                                   # Exclude email from the DN
+name_opt          = ca_default                           # Formatting options for names
+cert_opt          = ca_default                           # Certificate output options
+policy            = policy_strict                        # Certificate policy
+unique_subject    = no                                   # Allow multiple certs with the same DN
+
+[ policy_strict ]                                        # Policy for stricter validation
+countryName             = optional                       # Must match the issuer's country
+stateOrProvinceName     = optional                       # Must match the issuer's state
+organizationName        = optional                       # Must match the issuer's organization
+organizationalUnitName  = optional                       # Organizational unit is optional
+commonName              = supplied                       # Must provide a common name
+emailAddress            = optional                       # Email address is optional
+
+[ req ]                                                  # Request settings
+default_bits        = 2048                               # Default key size
+distinguished_name  = req_distinguished_name             # Default DN template
+string_mask         = utf8only                           # UTF-8 encoding
+default_md          = sha256                             # Default message digest
+prompt              = no                                 # Non-interactive mode
+
+[ req_distinguished_name ]                               # Template for the DN in the CSR
+commonName                      = Common Name (your domain)
+
+[ v3_ca ]                                           # Root CA certificate extensions
+subjectKeyIdentifier = hash                         # Subject key identifier
+authorityKeyIdentifier = keyid:always,issuer        # Authority key identifier
+basicConstraints = critical, CA:true                # Basic constraints for a CA
+keyUsage = critical, keyCertSign, cRLSign           # Key usage for a CA
+
+[ crl_ext ]                                         # CRL extensions
+authorityKeyIdentifier = keyid:always,issuer        # Authority key identifier
+
+[ v3_intermediate_ca ]
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid:always,issuer
+basicConstraints = critical, CA:true, pathlen:0
+keyUsage = critical, digitalSignature, cRLSign, keyCertSign
+EOF
+-->
 
 ## 2. Creating a new certificate
 

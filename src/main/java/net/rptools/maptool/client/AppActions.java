@@ -2277,7 +2277,7 @@ public class AppActions {
                         serverProps.getRPToolsName(),
                         "localhost",
                         serverProps.getUseEasyConnect(),
-                        serverProps.getUseWebRtc());
+                        serverProps.getTransport());
 
                 // Use the existing campaign
                 Campaign campaign = MapTool.getCampaign();
