@@ -139,6 +139,8 @@ reflections                  = { group = "org.reflections",             name = "
 yasb                         = { group = "yasb",                        name = "yasb",                    version = "0.2-21012007"    }
 # For map noise
 noiselib                     = { group = "com.github.cwisniew",         name = "NoiseLib",                version = "1.0.0"           }
+# For more secure password handling
+javakeyring                  = { group = "com.github.javakeyring",      name = "java-keyring",            version = "1.0.4"           }
 
 # JS support for macros
 graalvm-js                   = { group = "org.graalvm.js",              name = "js",                      version.ref = "graalvm-js"  }
