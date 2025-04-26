@@ -133,7 +133,33 @@ to a MapTool server running on port 51234.
 
 ## 4. Adding certificates to the client's trust store
 
+### Installing certificates into MapTool's trust store
+
+First locate the certificate. If it's a manually managed certificate it will be
+`~/.maptool-rptools/config/ca/certs/ca.crt`.
+If instead it is inside a key store it can be extracted with:
+
+```
+openssl pkcs12 -in ~/.maptool-rptools/config/keystore.p12 -nokeys -passin pass:"$(secret-tool lookup service maptool-rptools account '')" | openssl x509 -out ca.crt
+```
+
+If the trust store doesn't already exist run:
+
+```
+openssl pkcs12 -export -out ~/.maptool-rptools/config/truststore.p12 -passout pass:"$(secret-tool lookup service maptool-rptools account '')" -jdktrust anyExtendedKeyUsage -in ca.crt
+```
+
+If it does instead the new certificate can be added with:
+
+```
+openssl pkcs12 -export -in ~/.maptool-rptools/config/truststore.p12 -passin pass:"$(secret-tool lookup service maptool-rptools account '')" -out ~/.maptool-rptools/config/truststore.p12 -passout pass:"$(secret-tool lookup service maptool-rptools account '')" -jdktrust anyExtendedKeyUsage -certfile ca.crt
+```
+
 ### Installing certificates into the OS trust store
+
+This is not recommended because these certificates are available system-wide
+instead of being only available to MapTool,
+and would allow your GM to compromise your connections to web servers.
 
 ```
 sudo install -D -m644 ~/.maptool-rptools/config/ca/certs/ca.crt /usr/local/share/ca-certificates/extra/maptool-$(cat ~/.maptool-rptools/client-id)-root-ca.crt
