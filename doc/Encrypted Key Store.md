@@ -1,7 +1,28 @@
 Encrypted Key Store
 ===================
 
-Instead of using a key pair stored on disk, a key store may be used.
+Instead of using a key pair stored on disk, a key store may be used,
+located in a `keystore.p12` file in the MapTool configuration directory
+under the `config` subdirectory e.g. `~/.maptool-rptools/config/keystore.p12`.
+
+If your Operating System's keyring/credential store is functioning,
+the key store will be created next time keys are used if it does not exist
+and will be recreated when keys are regenerated.
+
+The existing key files are retained and will be recreated when keys are regenerated
+for compatibility with older versions of MapTool.
+
+The password to decrypt the key store is stored in your Operating System's credential store
+with the name `maptool-rptools|` or with a service named `maptool-rptools` and an empty account.
+
+In Linux the password can be retrieved with the following command:
+
+```
+secret-tool lookup service maptool-rptools account ''
+```
+
+Creating a key store by hand
+----------------------------
 
 First, convert the private key into PEM format since `openssl pkcs12`
 can't use them in the existing format.
