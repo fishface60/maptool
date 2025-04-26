@@ -43,6 +43,8 @@ servicediscovery             = { group = "net.tsc.servicediscovery",    name = "
 upnplib                      = { group = "com.github.fishface60",       name = "upnplib",                 version = "0351d7502a57f6c5dc8653220bc03ad99af58b21" }
 # For RESTful functions
 okhttp                       = { group = "com.squareup.okhttp3",        name = "okhttp",                  version = "4.12.0"          }
+# For SSL support
+bctls                        = { group = "org.bouncycastle",            name = "bctls-jdk18on",           version.ref = "bc"          }
 
 # Image processing lib
 imageio-core                 = { group = "com.twelvemonkeys.imageio",   name = "imageio-core",            version.ref = "imageio"     }
