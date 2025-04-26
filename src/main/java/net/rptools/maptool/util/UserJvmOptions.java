@@ -46,6 +46,7 @@ public class UserJvmOptions {
   private static final String I18N_RESOURCE_PREFIX = "i18n_";
   private static final String I18N_RESOURCE_PATH = "net/rptools/maptool/language";
   private static final String CURRENT_DATA_DIR = AppUtil.getAppHome().getName();
+  private static final String CURRENT_KEYRING_ID = AppUtil.getAppHome().getName();
   private static final Pattern UNIT_PATTERN = Pattern.compile("^([0-9]+)[g|G|m|M|k|K]$");
   private static final Map<String, String> LANGUAGE_MAP = getResourceBundles();
 
@@ -60,6 +61,7 @@ public class UserJvmOptions {
     setJvmOption(JVM_OPTION.STACK_SIZE, "");
     setJvmOption(JVM_OPTION.ASSERTIONS, "");
     setJvmOption(JVM_OPTION.DATA_DIR, "");
+    setJvmOption(JVM_OPTION.KEYRING_ID, "");
     setJvmOption(JVM_OPTION.LOCALE_LANGUAGE, "");
     setJvmOption(JVM_OPTION.LOCALE_COUNTRY, "");
     setJvmOption(JVM_OPTION.JAVA2D_D3D, "");
@@ -283,6 +285,7 @@ public class UserJvmOptions {
     STACK_SIZE("-Xss", ""),
     ASSERTIONS("-ea", ""),
     DATA_DIR("-DMAPTOOL_DATADIR", CURRENT_DATA_DIR),
+    KEYRING_ID("-DMAPTOOL_KEYRING_ID", CURRENT_KEYRING_ID),
     LOCALE_LANGUAGE("-Duser..language", ""),
     LOCALE_COUNTRY("-Duser..country", ""),
     JAVA2D_D3D("-Dsun..java2d..d3d", "true"),

@@ -27,6 +27,7 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.jar.Attributes;
 import java.util.jar.Manifest;
 import java.util.prefs.Preferences;
+import javax.annotation.Nonnull;
 import net.rptools.maptool.client.ui.zone.PlayerView;
 import net.rptools.maptool.language.I18N;
 import net.rptools.maptool.model.Token;
@@ -41,6 +42,7 @@ import org.apache.logging.log4j.Logger;
 public class AppUtil {
   public static final String DEFAULT_DATADIR_NAME = ".maptool";
   public static final String DATADIR_PROPERTY_NAME = "MAPTOOL_DATADIR";
+  public static final String KEYRING_ID_PROPERTY_NAME = "MAPTOOL_KEYRING_ID";
   public static final String LOGDIR_PROPERTY_NAME = "MAPTOOL_LOGDIR";
   private static final String CLIENT_ID_FILE = "client-id";
   private static final String CONFIG_SUB_DIR = "config";
@@ -179,6 +181,22 @@ public class AppUtil {
    */
   public static File getAppHome() {
     return getAppHome("");
+  }
+
+  /**
+   * Get the ID that can be used to store an application password in the OS Keyring.
+   *
+   * <p>By default this is "maptool-" suffixed with the vendor. This can be changed with the
+   * MAPTOOL_KEYRING_ID property and must be non-empty.
+   *
+   * @return The ID to store the MapTool KeyStore password in.
+   */
+  @Nonnull
+  public static String getKeyringId() {
+    var keyringId = System.getProperty(KEYRING_ID_PROPERTY_NAME);
+    assert keyringId != null && !keyringId.isEmpty()
+        : "Property " + KEYRING_ID_PROPERTY_NAME + " should be set and non-empty.";
+    return keyringId;
   }
 
   /**
