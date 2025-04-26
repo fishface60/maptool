@@ -141,6 +141,8 @@ yasb                         = { group = "yasb",                        name = "
 noiselib                     = { group = "com.github.cwisniew",         name = "NoiseLib",                version = "1.0.0"           }
 # For more secure password handling
 javakeyring                  = { group = "com.github.javakeyring",      name = "java-keyring",            version = "1.0.4"           }
+bcpkix                       = { group = "org.bouncycastle",            name = "bcpkix-jdk18on",          version.ref = "bc"          }
+bcprov                       = { group = "org.bouncycastle",            name = "bcprov-jdk18on",          version.ref = "bc"          }
 
 # JS support for macros
 graalvm-js                   = { group = "org.graalvm.js",              name = "js",                      version.ref = "graalvm-js"  }

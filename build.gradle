@@ -423,6 +423,8 @@ dependencies {
     implementation(libs.rptools.dice.roller)
     implementation(libs.noiselib)
     implementation(libs.javakeyring)
+    implementation(libs.bcpkix)
+    implementation(libs.bcprov)
 }
 
 processResources {
