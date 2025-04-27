@@ -151,6 +151,9 @@ to connect from the command-line to port 51232.
 ./gradlew run --args=rptools-maptool+tcps://${localips[0]}:51232
 ```
 
+Alternatively the "Use SSL" checkbox in the "Direct" tab of the connect dialog
+can be checked to specify to connect with SSL.
+
 ## 6. Connecting to a SSL enabled MapTool server using a tunnel
 
 Without native SSL support, MapTool must use an SSL tunnel.
