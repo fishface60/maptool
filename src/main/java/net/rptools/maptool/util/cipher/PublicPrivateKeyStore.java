@@ -47,15 +47,45 @@ public class PublicPrivateKeyStore {
   private static final String KEYPAIR_ALIAS = "MapToolKeyPair";
 
   /**
-   * Get the Application password.
+   * Get the Application password, creating it if it does not exist.
    *
    * <p>This should be used to get the password for use with getKeyStore.
    *
-   * @return the password
+   * @return an existing or newly created password
+   * @throws Keyring.UnavailableException if the OS keyring is unusable
+   * @throws Keyring.PasswordUnreadableException if the key is missing or unreadable
+   * @throws Keyring.PasswordUnwritableException if the key somehow unwritable
    */
   @Nonnull
+  public char[] getPassword()
+      throws Keyring.UnavailableException,
+          Keyring.PasswordUnreadableException,
+          Keyring.PasswordUnwritableException {
+    return KEYSTORE_FILE.exists() ? Keyring.readPassword() : Keyring.initPassword();
+  }
+
+  /**
+   * Get the Application password, logging and returning null instead of exceptions.
+   *
+   * @return the password as a char array or null if the keyring is inaccessible.
+   */
+  @Nullable
   private char[] getKeyStorePassword() {
-    return new char[] {'m', 'a', 'p', 't', 'o', 'o', 'l'};
+    try {
+      return getPassword();
+    } catch (Keyring.UnavailableException e) {
+      log.warn("OS Keyring service not supported, falling back to password files", e);
+      return null;
+    } catch (Keyring.PasswordUnreadableException e) {
+      log.warn(
+          "Keystore {} exists but password unreadable from OS keyring, falling back to key files",
+          KEYSTORE_FILE,
+          e);
+      return null;
+    } catch (Keyring.PasswordUnwritableException e) {
+      log.warn("Saving password to OS keyring failed, falling back to key files", e);
+      return null;
+    }
   }
 
   public static class KeyStoreUnreadableException extends Exception {
@@ -181,7 +211,7 @@ public class PublicPrivateKeyStore {
         () -> {
           try {
             var keystorePassword = getKeyStorePassword();
-            var keyStore = getKeyStoreOrNull(keystorePassword);
+            var keyStore = keystorePassword == null ? null : getKeyStoreOrNull(keystorePassword);
 
             KeyPair keyStorePair;
             try {
