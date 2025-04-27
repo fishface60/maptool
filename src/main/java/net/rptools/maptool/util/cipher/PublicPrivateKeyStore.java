@@ -15,24 +15,39 @@
 package net.rptools.maptool.util.cipher;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.math.BigInteger;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.KeyPair;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.security.UnrecoverableEntryException;
+import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.spec.InvalidKeySpecException;
+import java.util.Date;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.crypto.NoSuchPaddingException;
+import javax.security.auth.x500.X500Principal;
 import net.rptools.maptool.client.AppUtil;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.bouncycastle.asn1.x509.BasicConstraints;
+import org.bouncycastle.asn1.x509.Extension;
+import org.bouncycastle.cert.CertIOException;
+import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
+import org.bouncycastle.cert.jcajce.JcaX509ExtensionUtils;
+import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
+import org.bouncycastle.operator.ContentSigner;
+import org.bouncycastle.operator.OperatorCreationException;
+import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 
 public class PublicPrivateKeyStore {
 
@@ -199,6 +214,70 @@ public class PublicPrivateKeyStore {
     return new KeyPair(pke.getCertificate().getPublicKey(), pke.getPrivateKey());
   }
 
+  private void setKeyStoreKeys(KeyStore keyStore, char[] password, CipherUtil.Key keys)
+      throws IOException {
+    assert keys.asymmetric() && keys.publicKey() != null && keys.privateKey() != null;
+
+    var subject = new X500Principal("CN=MapTool " + AppUtil.readClientId() + " CA Root");
+    var serial = BigInteger.valueOf(new SecureRandom().nextInt());
+    var issue = System.currentTimeMillis();
+    var expiry = issue + (1000L * 60 * 60 * 24 * 365 * 10); // 10 years
+    var certBuilder =
+        new JcaX509v3CertificateBuilder(
+            subject, serial, new Date(issue), new Date(expiry), subject, keys.publicKey());
+
+    JcaX509ExtensionUtils extensionUtils;
+    try {
+      extensionUtils = new JcaX509ExtensionUtils();
+    } catch (NoSuchAlgorithmException e) {
+      throw new AssertionError("JcaX509ExtensionUtils default algorithm should be provided", e);
+    }
+
+    try {
+      certBuilder.addExtension(
+          Extension.authorityKeyIdentifier,
+          false,
+          extensionUtils.createAuthorityKeyIdentifier(keys.publicKey()));
+      certBuilder.addExtension(
+          Extension.subjectKeyIdentifier,
+          false,
+          extensionUtils.createSubjectKeyIdentifier(keys.publicKey()));
+      certBuilder.addExtension(Extension.basicConstraints, true, new BasicConstraints(true));
+    } catch (CertIOException e) {
+      throw new AssertionError("Cert builder extensions should be valid", e);
+    }
+
+    ContentSigner signer;
+    try {
+      signer = new JcaContentSignerBuilder("SHA256withRSA").build(keys.privateKey());
+    } catch (OperatorCreationException e) {
+      throw new AssertionError("Content signer should be valid", e);
+    }
+
+    var certHolder = certBuilder.build(signer);
+    Certificate cert;
+    try {
+      cert = new JcaX509CertificateConverter().getCertificate(certHolder);
+    } catch (CertificateException e) {
+      throw new AssertionError("New certificate should be valid", e);
+    }
+
+    var chain = new Certificate[] {cert};
+    try {
+      keyStore.setKeyEntry(KEYPAIR_ALIAS, keys.privateKey(), password, chain);
+    } catch (KeyStoreException e) {
+      throw new AssertionError("Keys should be storable in key store", e);
+    }
+
+    try {
+      keyStore.store(new FileOutputStream(KEYSTORE_FILE), password);
+    } catch (KeyStoreException e) {
+      throw new AssertionError("Key store should be initialized", e);
+    } catch (NoSuchAlgorithmException | CertificateException e) {
+      throw new AssertionError("Key store parameters and certificates should be valid", e);
+    }
+  }
+
   /**
    * Returns the public and private keys for this client. If none exists it will attempt to create
    * them and save them to the key files.
@@ -234,6 +313,10 @@ public class PublicPrivateKeyStore {
 
             log.debug("Falling back to key files");
 
+            // NOTE: It's possible to regenerate a public key from a private key
+            // but we don't expect this to be likely enough to prefer to do that
+            // instead of just regenerating both.
+
             CipherUtil.Key keys;
             if (!PUBLIC_KEY_FILE.exists() || !PRIVATE_KEY_FILE.exists()) {
               var keyPair = CipherUtil.generateKeyPair();
@@ -241,6 +324,15 @@ public class PublicPrivateKeyStore {
               keys = CipherUtil.fromPublicPrivatePair(keyPair.getPublic(), keyPair.getPrivate());
             } else {
               keys = CipherUtil.fromPublicPrivatePair(PUBLIC_KEY_FILE, PRIVATE_KEY_FILE);
+            }
+
+            if (keyStorePair == null && keyStore != null) {
+              try {
+                setKeyStoreKeys(keyStore, keystorePassword, keys);
+              } catch (IOException e) {
+                log.warn(
+                    "unable to write to keystore file {}, keys not saved in it", KEYSTORE_FILE, e);
+              }
             }
 
             return keys;
@@ -267,12 +359,23 @@ public class PublicPrivateKeyStore {
           try {
             KeyPair keyPair = CipherUtil.generateKeyPair();
             CipherUtil.writeKeyPair(keyPair, PUBLIC_KEY_FILE, PRIVATE_KEY_FILE);
+            var keys = CipherUtil.fromPublicPrivatePair(keyPair.getPublic(), keyPair.getPrivate());
 
-            return CipherUtil.fromPublicPrivatePair(PUBLIC_KEY_FILE, PRIVATE_KEY_FILE);
+            var password = getKeyStorePassword();
+            var keyStore = password == null ? null : getKeyStoreOrNull(password);
+            if (keyStore != null) {
+              try {
+                setKeyStoreKeys(keyStore, password, keys);
+              } catch (IOException e) {
+                log.warn(
+                    "unable to write to keystore file {}, keys not saved in it", KEYSTORE_FILE, e);
+              }
+            }
+
+            return keys;
           } catch (IOException
               | NoSuchAlgorithmException
               | InvalidAlgorithmParameterException
-              | InvalidKeySpecException
               | NoSuchPaddingException
               | InvalidKeyException e) {
             throw new CompletionException(e);
