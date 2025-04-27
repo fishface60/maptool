@@ -15,23 +15,272 @@
 package net.rptools.maptool.util.cipher;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.math.BigInteger;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.KeyPair;
+import java.security.KeyStore;
+import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.security.UnrecoverableEntryException;
+import java.security.cert.Certificate;
+import java.security.cert.CertificateException;
 import java.security.spec.InvalidKeySpecException;
+import java.util.Date;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import javax.crypto.NoSuchPaddingException;
+import javax.security.auth.x500.X500Principal;
 import net.rptools.maptool.client.AppUtil;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.bouncycastle.asn1.x509.BasicConstraints;
+import org.bouncycastle.asn1.x509.Extension;
+import org.bouncycastle.cert.CertIOException;
+import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
+import org.bouncycastle.cert.jcajce.JcaX509ExtensionUtils;
+import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
+import org.bouncycastle.operator.ContentSigner;
+import org.bouncycastle.operator.OperatorCreationException;
+import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 
 public class PublicPrivateKeyStore {
+
+  private static final Logger log = LogManager.getLogger(PublicPrivateKeyStore.class);
 
   private static final File PUBLIC_KEY_FILE =
       AppUtil.getAppHome("config").toPath().resolve("public.key").toFile();
   private static final File PRIVATE_KEY_FILE =
       AppUtil.getAppHome("config").toPath().resolve("private.key").toFile();
+  private static final File KEYSTORE_FILE =
+      AppUtil.getAppHome("config").toPath().resolve("keystore.p12").toFile();
+  private static final String KEYPAIR_ALIAS = "MapToolKeyPair";
+  private static final File TRUSTSTORE_FILE =
+      AppUtil.getAppHome("config").toPath().resolve("truststore.p12").toFile();
+
+  /**
+   * Get the Application password, creating it if it does not exist.
+   *
+   * <p>This should be used to get the password for use with getKeyStore and getTrustStore.
+   *
+   * @return an existing or newly created password
+   * @throws Keyring.UnavailableException if the OS keyring is unusable
+   * @throws Keyring.PasswordUnreadableException if the key is missing or unreadable
+   * @throws Keyring.PasswordUnwritableException if the key somehow unwritable
+   */
+  @Nonnull
+  public char[] getPassword()
+      throws Keyring.UnavailableException,
+          Keyring.PasswordUnreadableException,
+          Keyring.PasswordUnwritableException {
+    return (KEYSTORE_FILE.exists() || TRUSTSTORE_FILE.exists())
+        ? Keyring.readPassword()
+        : Keyring.initPassword();
+  }
+
+  /**
+   * Get the Application password, logging and returning null instead of exceptions.
+   *
+   * @return the password as a char array or null if the keyring is inaccessible.
+   */
+  @Nullable
+  private char[] getKeyStorePassword() {
+    try {
+      return getPassword();
+    } catch (Keyring.UnavailableException e) {
+      log.warn("OS Keyring service not supported, falling back to password files", e);
+      return null;
+    } catch (Keyring.PasswordUnreadableException e) {
+      log.warn(
+          "Keystore {} exists but password unreadable from OS keyring, falling back to key files",
+          KEYSTORE_FILE,
+          e);
+      return null;
+    } catch (Keyring.PasswordUnwritableException e) {
+      log.warn("Saving password to OS keyring failed, falling back to key files", e);
+      return null;
+    }
+  }
+
+  public static class KeyStoreUnreadableException extends Exception {
+    KeyStoreUnreadableException(Throwable cause) {
+      super("Key Store is unreadable", cause);
+    }
+  }
+
+  @Nonnull
+  private KeyStore createEmptyKeyStore(@Nonnull char[] password) {
+    KeyStore ks;
+    try {
+      ks = KeyStore.getInstance("PKCS12");
+    } catch (KeyStoreException e) {
+      throw new AssertionError("PKCS12 should be a built-in KeyStore algorithm", e);
+    }
+    try {
+      ks.load(null, password);
+    } catch (IOException | NoSuchAlgorithmException | CertificateException e) {
+      throw new AssertionError("Loading an empty key store should be infallible", e);
+    }
+    return ks;
+  }
+
+  /**
+   * Get an instance of the key store located in the config directory.
+   *
+   * <p>Creates an empty key store if it's missing so keys can be added later.
+   *
+   * @param password The password required to unlock the key store
+   * @return The key store in the config directory or a new empty key store if it didn't exist.
+   * @throws KeyStoreUnreadableException if the key store exists but can't be read
+   */
+  @Nonnull
+  public KeyStore getKeyStore(@Nonnull char[] password) throws KeyStoreUnreadableException {
+    if (!KEYSTORE_FILE.exists()) {
+      return createEmptyKeyStore(password);
+    }
+
+    try {
+      return KeyStore.getInstance(KEYSTORE_FILE, password);
+    } catch (IllegalArgumentException | NullPointerException e) {
+      throw new AssertionError(
+          "A keystore loaded from a statically defined path should be infallible", e);
+    } catch (KeyStoreException | IOException | NoSuchAlgorithmException | CertificateException e) {
+      throw new KeyStoreUnreadableException(e);
+    }
+  }
+
+  /**
+   * Get an instance of the key store located in the config directory.
+   *
+   * <p>Logs a warning if there is an unusable key store but creates an empty key store if it's
+   * missing so keys can be added later.
+   *
+   * @param password The password required to open the key store
+   * @return The key store in the config directory, a new empty key store if it didn't exist, or
+   *     null if there's an unusuable key store.
+   */
+  @Nullable
+  private KeyStore getKeyStoreOrNull(@Nonnull char[] password) {
+    try {
+      return getKeyStore(password);
+    } catch (KeyStoreUnreadableException e) {
+      log.warn("The key store {} is unusable, falling back to key files", KEYSTORE_FILE, e);
+      return null;
+    }
+  }
+
+  class UnreadableEntryException extends Exception {
+    UnreadableEntryException(Throwable e) {
+      super(e);
+    }
+  }
+
+  class InappropriateEntryException extends Exception {
+    InappropriateEntryException() {
+      super("Not a key pair");
+    }
+  }
+
+  @Nullable
+  private KeyPair getKeyStoreKeys(@Nonnull KeyStore keyStore, @Nonnull char[] password)
+      throws UnreadableEntryException, InappropriateEntryException {
+    KeyStore.ProtectionParameter protParam = new KeyStore.PasswordProtection(password);
+    KeyStore.Entry entry;
+    try {
+      entry = keyStore.getEntry(KEYPAIR_ALIAS, protParam);
+    } catch (NullPointerException e) {
+      throw new AssertionError("Statically defined key store aliases should be non-null", e);
+    } catch (KeyStoreException e) {
+      throw new AssertionError("getKeyStoreKeys should only be passed an initialized Key Store", e);
+    } catch (NoSuchAlgorithmException | UnrecoverableEntryException e) {
+      throw new UnreadableEntryException(e);
+    }
+
+    if (entry == null) {
+      if (KEYSTORE_FILE.exists()) {
+        log.warn(
+            "Keystore {} exists but is missing alias {}, falling back to key files.",
+            KEYSTORE_FILE,
+            KEYPAIR_ALIAS);
+      }
+      return null;
+    }
+
+    if (!(entry instanceof KeyStore.PrivateKeyEntry pke)) {
+      throw new InappropriateEntryException();
+    }
+
+    return new KeyPair(pke.getCertificate().getPublicKey(), pke.getPrivateKey());
+  }
+
+  private void setKeyStoreKeys(KeyStore keyStore, char[] password, CipherUtil.Key keys)
+      throws IOException {
+    assert keys.asymmetric() && keys.publicKey() != null && keys.privateKey() != null;
+
+    var subject = new X500Principal("CN=MapTool " + AppUtil.readClientId() + " CA Root");
+    var serial = BigInteger.valueOf(new SecureRandom().nextInt());
+    var issue = System.currentTimeMillis();
+    var expiry = issue + (1000L * 60 * 60 * 24 * 365 * 10); // 10 years
+    var certBuilder =
+        new JcaX509v3CertificateBuilder(
+            subject, serial, new Date(issue), new Date(expiry), subject, keys.publicKey());
+
+    JcaX509ExtensionUtils extensionUtils;
+    try {
+      extensionUtils = new JcaX509ExtensionUtils();
+    } catch (NoSuchAlgorithmException e) {
+      throw new AssertionError("JcaX509ExtensionUtils default algorithm should be provided", e);
+    }
+
+    try {
+      certBuilder.addExtension(
+          Extension.authorityKeyIdentifier,
+          false,
+          extensionUtils.createAuthorityKeyIdentifier(keys.publicKey()));
+      certBuilder.addExtension(
+          Extension.subjectKeyIdentifier,
+          false,
+          extensionUtils.createSubjectKeyIdentifier(keys.publicKey()));
+      certBuilder.addExtension(Extension.basicConstraints, true, new BasicConstraints(true));
+    } catch (CertIOException e) {
+      throw new AssertionError("Cert builder extensions should be valid", e);
+    }
+
+    ContentSigner signer;
+    try {
+      signer = new JcaContentSignerBuilder("SHA256withRSA").build(keys.privateKey());
+    } catch (OperatorCreationException e) {
+      throw new AssertionError("Content signer should be valid", e);
+    }
+
+    var certHolder = certBuilder.build(signer);
+    Certificate cert;
+    try {
+      cert = new JcaX509CertificateConverter().getCertificate(certHolder);
+    } catch (CertificateException e) {
+      throw new AssertionError("New certificate should be valid", e);
+    }
+
+    var chain = new Certificate[] {cert};
+    try {
+      keyStore.setKeyEntry(KEYPAIR_ALIAS, keys.privateKey(), password, chain);
+    } catch (KeyStoreException e) {
+      throw new AssertionError("Keys should be storable in key store", e);
+    }
+
+    try {
+      keyStore.store(new FileOutputStream(KEYSTORE_FILE), password);
+    } catch (KeyStoreException e) {
+      throw new AssertionError("Key store should be initialized", e);
+    } catch (NoSuchAlgorithmException | CertificateException e) {
+      throw new AssertionError("Key store parameters and certificates should be valid", e);
+    }
+  }
 
   /**
    * Returns the public and private keys for this client. If none exists it will attempt to create
@@ -44,12 +293,53 @@ public class PublicPrivateKeyStore {
     return CompletableFuture.supplyAsync(
         () -> {
           try {
-            if (!PUBLIC_KEY_FILE.exists() || !PRIVATE_KEY_FILE.exists()) {
-              KeyPair keyPair = null;
-              keyPair = CipherUtil.generateKeyPair();
-              CipherUtil.writeKeyPair(keyPair, PUBLIC_KEY_FILE, PRIVATE_KEY_FILE);
+            var keystorePassword = getKeyStorePassword();
+            var keyStore = keystorePassword == null ? null : getKeyStoreOrNull(keystorePassword);
+
+            KeyPair keyStorePair;
+            try {
+              keyStorePair = keyStore == null ? null : getKeyStoreKeys(keyStore, keystorePassword);
+            } catch (UnreadableEntryException | InappropriateEntryException e) {
+              log.warn(
+                  "Keystore {} has an unreadable entry for {}, falling back to key files",
+                  KEYSTORE_FILE,
+                  KEYPAIR_ALIAS,
+                  e);
+              keyStorePair = null;
+              // Treat a key store with unreadable keys as unusable.
+              keyStore = null;
             }
-            return CipherUtil.fromPublicPrivatePair(PUBLIC_KEY_FILE, PRIVATE_KEY_FILE);
+
+            if (keyStorePair != null) {
+              return CipherUtil.fromPublicPrivatePair(
+                  keyStorePair.getPublic(), keyStorePair.getPrivate());
+            }
+
+            log.debug("Falling back to key files");
+
+            // NOTE: It's possible to regenerate a public key from a private key
+            // but we don't expect this to be likely enough to prefer to do that
+            // instead of just regenerating both.
+
+            CipherUtil.Key keys;
+            if (!PUBLIC_KEY_FILE.exists() || !PRIVATE_KEY_FILE.exists()) {
+              var keyPair = CipherUtil.generateKeyPair();
+              CipherUtil.writeKeyPair(keyPair, PUBLIC_KEY_FILE, PRIVATE_KEY_FILE);
+              keys = CipherUtil.fromPublicPrivatePair(keyPair.getPublic(), keyPair.getPrivate());
+            } else {
+              keys = CipherUtil.fromPublicPrivatePair(PUBLIC_KEY_FILE, PRIVATE_KEY_FILE);
+            }
+
+            if (keyStorePair == null && keyStore != null) {
+              try {
+                setKeyStoreKeys(keyStore, keystorePassword, keys);
+              } catch (IOException e) {
+                log.warn(
+                    "unable to write to keystore file {}, keys not saved in it", KEYSTORE_FILE, e);
+              }
+            }
+
+            return keys;
           } catch (NoSuchAlgorithmException
               | IOException
               | InvalidAlgorithmParameterException
@@ -73,16 +363,52 @@ public class PublicPrivateKeyStore {
           try {
             KeyPair keyPair = CipherUtil.generateKeyPair();
             CipherUtil.writeKeyPair(keyPair, PUBLIC_KEY_FILE, PRIVATE_KEY_FILE);
+            var keys = CipherUtil.fromPublicPrivatePair(keyPair.getPublic(), keyPair.getPrivate());
 
-            return CipherUtil.fromPublicPrivatePair(PUBLIC_KEY_FILE, PRIVATE_KEY_FILE);
+            var password = getKeyStorePassword();
+            var keyStore = password == null ? null : getKeyStoreOrNull(password);
+            if (keyStore != null) {
+              try {
+                setKeyStoreKeys(keyStore, password, keys);
+              } catch (IOException e) {
+                log.warn(
+                    "unable to write to keystore file {}, keys not saved in it", KEYSTORE_FILE, e);
+              }
+            }
+
+            return keys;
           } catch (IOException
               | NoSuchAlgorithmException
               | InvalidAlgorithmParameterException
-              | InvalidKeySpecException
               | NoSuchPaddingException
               | InvalidKeyException e) {
             throw new CompletionException(e);
           }
         });
+  }
+
+  /**
+   * Get an instance of the trust store located in the config directory.
+   *
+   * <p>Creates an empty trust store if it's missing so certificates can be added later.
+   *
+   * @param password The password required to unlock the trust store
+   * @return The trust store in the config directory or a new empty key store if it didn't exist.
+   * @throws KeyStoreUnreadableException if the key store exists but can't be read
+   */
+  @Nonnull
+  public KeyStore getTrustStore(@Nonnull char[] password) throws KeyStoreUnreadableException {
+    if (!TRUSTSTORE_FILE.exists()) {
+      return createEmptyKeyStore(password);
+    }
+
+    try {
+      return KeyStore.getInstance(TRUSTSTORE_FILE, password);
+    } catch (IllegalArgumentException | NullPointerException e) {
+      throw new AssertionError(
+          "A truststore loaded from a statically defined path should be infallible", e);
+    } catch (KeyStoreException | IOException | NoSuchAlgorithmException | CertificateException e) {
+      throw new KeyStoreUnreadableException(e);
+    }
   }
 }

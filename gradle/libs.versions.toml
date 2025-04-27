@@ -10,6 +10,7 @@ jai-imageio = "1.4.0"
 graalvm-js = "21.2.0"
 pdfbox = "3.0.0"
 protoc = "4.29.1"
+bc = "1.80"
 
 [libraries]
 findbugs-jsr305              = { group = "com.google.code.findbugs",    name = "jsr305",                  version     = "3.0.2"       }
@@ -42,6 +43,8 @@ servicediscovery             = { group = "net.tsc.servicediscovery",    name = "
 upnplib                      = { group = "com.github.fishface60",       name = "upnplib",                 version = "0351d7502a57f6c5dc8653220bc03ad99af58b21" }
 # For RESTful functions
 okhttp                       = { group = "com.squareup.okhttp3",        name = "okhttp",                  version = "4.12.0"          }
+# For SSL support
+bctls                        = { group = "org.bouncycastle",            name = "bctls-jdk18on",           version.ref = "bc"          }
 
 # Image processing lib
 imageio-core                 = { group = "com.twelvemonkeys.imageio",   name = "imageio-core",            version.ref = "imageio"     }
@@ -56,7 +59,7 @@ batik                        = { group = "org.apache.xmlgraphics",      name = "
 pdfbox                       = { group = "org.apache.pdfbox",           name = "pdfbox",                  version.ref = "pdfbox"      }
 pdfbox-tools                 = { group = "org.apache.pdfbox",           name = "pdfbox-tools",            version.ref = "pdfbox"      }
 # To decrypt passworded/secured PDFs
-bcmail                       = { group = "org.bouncycastle",            name = "bcmail-jdk15on",          version     = "1.70"        }
+bcmail                       = { group = "org.bouncycastle",            name = "bcmail-jdk18on",          version.ref = "bc"          }
 # For pdf image extraction, specifically for jpeg2000 (jpx) support.
 jai-imageio-core             = { group = "com.github.jai-imageio",      name = "jai-imageio-core",        version.ref = "jai-imageio" }
 jai-imageio-jpeg             = { group = "com.github.jai-imageio",      name = "jai-imageio-jpeg2000",    version.ref = "jai-imageio" }
@@ -138,6 +141,10 @@ reflections                  = { group = "org.reflections",             name = "
 yasb                         = { group = "yasb",                        name = "yasb",                    version = "0.2-21012007"    }
 # For map noise
 noiselib                     = { group = "com.github.cwisniew",         name = "NoiseLib",                version = "1.0.0"           }
+# For more secure password handling
+javakeyring                  = { group = "com.github.javakeyring",      name = "java-keyring",            version = "1.0.4"           }
+bcpkix                       = { group = "org.bouncycastle",            name = "bcpkix-jdk18on",          version.ref = "bc"          }
+bcprov                       = { group = "org.bouncycastle",            name = "bcprov-jdk18on",          version.ref = "bc"          }
 
 # JS support for macros
 graalvm-js                   = { group = "org.graalvm.js",              name = "js",                      version.ref = "graalvm-js"  }
