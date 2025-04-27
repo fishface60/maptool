@@ -60,11 +60,13 @@ public class PublicPrivateKeyStore {
   private static final File KEYSTORE_FILE =
       AppUtil.getAppHome("config").toPath().resolve("keystore.p12").toFile();
   private static final String KEYPAIR_ALIAS = "MapToolKeyPair";
+  private static final File TRUSTSTORE_FILE =
+      AppUtil.getAppHome("config").toPath().resolve("truststore.p12").toFile();
 
   /**
    * Get the Application password, creating it if it does not exist.
    *
-   * <p>This should be used to get the password for use with getKeyStore.
+   * <p>This should be used to get the password for use with getKeyStore and getTrustStore.
    *
    * @return an existing or newly created password
    * @throws Keyring.UnavailableException if the OS keyring is unusable
@@ -76,7 +78,9 @@ public class PublicPrivateKeyStore {
       throws Keyring.UnavailableException,
           Keyring.PasswordUnreadableException,
           Keyring.PasswordUnwritableException {
-    return KEYSTORE_FILE.exists() ? Keyring.readPassword() : Keyring.initPassword();
+    return (KEYSTORE_FILE.exists() || TRUSTSTORE_FILE.exists())
+        ? Keyring.readPassword()
+        : Keyring.initPassword();
   }
 
   /**
@@ -381,5 +385,30 @@ public class PublicPrivateKeyStore {
             throw new CompletionException(e);
           }
         });
+  }
+
+  /**
+   * Get an instance of the trust store located in the config directory.
+   *
+   * <p>Creates an empty trust store if it's missing so certificates can be added later.
+   *
+   * @param password The password required to unlock the trust store
+   * @return The trust store in the config directory or a new empty key store if it didn't exist.
+   * @throws KeyStoreUnreadableException if the key store exists but can't be read
+   */
+  @Nonnull
+  public KeyStore getTrustStore(@Nonnull char[] password) throws KeyStoreUnreadableException {
+    if (!TRUSTSTORE_FILE.exists()) {
+      return createEmptyKeyStore(password);
+    }
+
+    try {
+      return KeyStore.getInstance(TRUSTSTORE_FILE, password);
+    } catch (IllegalArgumentException | NullPointerException e) {
+      throw new AssertionError(
+          "A truststore loaded from a statically defined path should be infallible", e);
+    } catch (KeyStoreException | IOException | NoSuchAlgorithmException | CertificateException e) {
+      throw new KeyStoreUnreadableException(e);
+    }
   }
 }
