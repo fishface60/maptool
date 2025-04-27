@@ -140,7 +140,18 @@ sudo install -D -m644 ~/.maptool-rptools/config/ca/certs/ca.crt /usr/local/share
 sudo update-ca-certificates
 ```
 
-## 5. Connecting to a SSL enabled MapTool server using a tunnel
+## 5. Connecting to a SSL enabled MapTool server directly
+
+With the certificate installed in the system certificate store
+the second `TCP-LISTEN` socat tunnel can be omitted
+and the new `rptools-maptool+tcps://` scheme used
+to connect from the command-line to port 51232.
+
+```
+./gradlew run --args=rptools-maptool+tcps://${localips[0]}:51232
+```
+
+## 6. Connecting to a SSL enabled MapTool server using a tunnel
 
 Without native SSL support, MapTool must use an SSL tunnel.
 
